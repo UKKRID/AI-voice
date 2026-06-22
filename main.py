@@ -19,6 +19,7 @@ def main():
     print("AI Voice Assistant")
     print(f"Wake word: '{WAKE_WORD}'")
     print("พูด 'หยุด' หรือ 'exit' เพื่อออก")
+    print("พูด 'ล้าง' เพื่อล้างประวัติ")
     print("=" * 50)
 
     speech = SpeechEngine()
