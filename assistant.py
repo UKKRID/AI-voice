@@ -4,6 +4,9 @@ import json
 import datetime
 import tempfile
 import uuid
+import sys
+import io
+import time
 import requests
 import edge_tts
 import asyncio
@@ -13,6 +16,7 @@ from threading import Thread
 from config import OLLAMA_BASE_URL, OLLAMA_MODEL, TTS_VOICE, TTS_RATE
 from speech import set_speaking
 
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 TOOLS = {
     "get_time": lambda: datetime.datetime.now().strftime("%H:%M"),
@@ -60,6 +64,7 @@ class Assistant:
             reply = self._handle_tools(reply)
             attempts += 1
 
+        self._queue.join()
         self.messages.append({"role": "assistant", "content": reply})
         return reply
 
@@ -86,12 +91,16 @@ class Assistant:
                 continue
 
             full_reply += token
-            if "[tool:" not in full_reply and "[tool" not in full_reply:
-                buffer += token
-                print(token, end="", flush=True)
-                if re.search(r'[.!?\?]', buffer):
-                    self._speak(buffer.strip())
-                    buffer = ""
+
+            if re.search(r'\[tool', full_reply):
+                continue
+
+            buffer += token
+            print(token, end="", flush=True)
+
+            if re.search(r'[.!?\?]', buffer):
+                self._speak(buffer.strip())
+                buffer = ""
 
         if buffer.strip():
             self._speak(buffer.strip())
@@ -118,10 +127,6 @@ class Assistant:
         self.messages.append({"role": "assistant", "content": reply})
         self.messages.append({"role": "user", "content": f"[ผลลัพธ์จาก {tool_name}]: {result}\n\nตอนนี้จงตอบผู้ใช้เป็นภาษาไทยตามปกติ ไม่ต้องใช้ tool อีก"})
 
-        followup = self._call_llm_simple()
-        return followup
-
-    def _call_llm_simple(self) -> str:
         response = requests.post(
             f"{self.base_url}/api/chat",
             json={
@@ -144,12 +149,12 @@ class Assistant:
                 continue
 
             full_reply += token
-            if not re.search(r'\[tool', full_reply):
-                buffer += token
-                print(token, end="", flush=True)
-                if re.search(r'[.!?\?]', buffer):
-                    self._speak(buffer.strip())
-                    buffer = ""
+            buffer += token
+            print(token, end="", flush=True)
+
+            if re.search(r'[.!?\?]', buffer):
+                self._speak(buffer.strip())
+                buffer = ""
 
         if buffer.strip():
             self._speak(buffer.strip())
@@ -178,8 +183,8 @@ class Assistant:
                     os.remove(path)
                 except OSError:
                     pass
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"  [TTS: {e}]", flush=True)
             finally:
                 set_speaking(False)
                 self._queue.task_done()
